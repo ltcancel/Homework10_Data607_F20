@@ -20,8 +20,14 @@ The code in sections 2.1 - 2.3 were copied from [Text Mining with R: Chapter 2](
 
 ```{r message=FALSE, warning=FALSE}
 #libraries
-install.packages("textdata")
+#install.packages("textdata")
 library(tidytext)
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
 ```
 ## Section 2.1 The sentiments dataset
 ```{r message=FALSE, warning=FALSE}
@@ -33,12 +39,6 @@ get_sentiments("nrc")
 
 ## Section 2.2 Sentiment analysis with inner join
 ```{r message=FALSE, warning=FALSE}
-library(janeaustenr)
-library(dplyr)
-library(stringr)
-library(tidyr)
-library(ggplot2)
-
 tidy_books <- austen_books() %>%
   group_by(book) %>%
   mutate(
@@ -62,12 +62,16 @@ jane_austen_sentiment <- tidy_books %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative)
 
+jane_austen_sentiment
+
 ggplot(jane_austen_sentiment, aes(index, sentiment, fill = book)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~book, ncol = 2, scales = "free_x")
 ```
-## Section 2.3 Comparing the tree sentiment dictionaries
-```{r}
+
+
+## Section 2.3 Comparing the three sentiment dictionaries
+```{r message=FALSE, warning=FALSE}
 pride_prejudice <- tidy_books %>%
   filter(book == "Pride & Prejudice")
 
@@ -109,12 +113,62 @@ get_sentiments("bing") %>%
 
 # Extend Analysis
 
-Sentiment analysis using the corpus 
-```{r}
+## Import Data
 
+Sentiment analysis using the Yoda Speech Corpus from [kaggle](https://www.kaggle.com/stefanocoretta/yoda-speech-corpus)^2^ 
+
+This looks at lines spoken by Yoda and the characters he was speaking to from all 6 Star Wars films.
+```{r message=FALSE, warning=FALSE}
+site <- "https://raw.githubusercontent.com/ltcancel/Homework10_Data607_F20/main/yoda-corpus.csv"
+
+yoda_df <- read_csv(url(site))
+
+head(yoda_df)
+```
+
+If we look at the top 20 words used in dialog by or with Yoda, we see that Yoda was mentioned the most. Followed by Jedi and Master. If you are a fan of the films you could probably put together a "Yoda" sentence by just looking at the top 20 words. 
+```{r message=FALSE, warning=FALSE}
+yoda_sentiment <- yoda_df %>%
+  unnest_tokens(word,text) %>%
+  anti_join(get_stopwords()) %>%
+  count(movie, word, sort = TRUE) 
+
+#all words without filtering
+yoda_sentiment %>%
+  group_by(word) %>%
+  summarise(total = sum(n)) %>%
+  arrange(desc(total)) %>%
+  top_n(20, total)
+
+```
+We can also look at the frequency of words if we filter out words that are specific to the film which include character names and the word "Force".
+```{r message=FALSE, warning=FALSE}
+#filter out star wars terms
+yoda_sentiment %>%
+  group_by(word) %>%
+  filter(!(word %in% c("obi","wan","force","yoda","jedi","anakin","qui","gon","sith","palpatine","luke"))) %>%
+  summarise(total = sum(n)) %>%
+  arrange(desc(total)) %>%
+  top_n(20, total)
+```
+
+I used the NRC lexicon and joined it with the words from the Yoda Speech corpus. The NRC lexicon uses scores other than positive or negative sentiment. We can categorize the top 15 words with different emotions. There are some words that fall under multiple categories. Obi-Wan is categories fear, sadness, and negative.
+```{r message=FALSE, warning=FALSE}
+#only filter out words that were part of the inner join to the NRC sentiment
+yoda_sentiment %>%
+  #filter(!(word %in% c("obi","wan","force"))) %>%
+  group_by(movie, word) %>%
+  summarise(total = sum(n)) %>%
+  inner_join(get_sentiments("nrc")) %>%
+  top_n(15, total) %>%
+  ggplot(aes(word, total, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, ncol = 3, scales = "free_y") + 
+  labs(y = "Contribution to Sentiment", x = NULL) +
+  coord_flip()
 ```
 
 
 Citation: 
 1. Robinson, J. (2020). Text Mining with R. Retrieved 31 October 2020, from https://www.tidytextmining.com/
-2. 
+2. Coretta, S. (2020). Yoda Speech Corpus. Retrieved 31 October 2020, from https://www.kaggle.com/stefanocoretta/yoda-speech-corpus
